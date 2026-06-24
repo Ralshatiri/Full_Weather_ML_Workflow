@@ -1,0 +1,26 @@
+services:
+
+  database:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+    # Stores PostgreSQL data permanently, so data is not lost when the container stops
+      - postgres_data:/var/lib/postgresql/data
+    # Runs SQL initialization files from the local ./sql folder
+
+      - ./sql:/docker-entrypoint-initdb.d
+
+  app:
+    build: .
+    depends_on:
+      - database
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:
