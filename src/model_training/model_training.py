@@ -1,7 +1,8 @@
 import os
-from dotenv import load_dotenv
 import pandas as pd
+import joblib
 from sqlalchemy import create_engine
+from dotenv import load_dotenv
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
@@ -75,6 +76,11 @@ def model_training():
     )
 
     model.fit(X_train,y_train)
+
+# Saving the model
+    os.makedirs("model",exist_ok=True)
+    joblib.dump(model,"model/random_forest_model.joblib")
+    print("Random forest model saved to model directory ")
 
     y_pred = model.predict(X_test)
     test_rmse = root_mean_squared_error(y_test,y_pred)

@@ -46,3 +46,33 @@ CREATE TABLE IF NOT EXISTS processed_weather (
     longitude FLOAT
 );
 
+-- =====================
+-- PREDICTIONS TABLE
+-- =====================
+
+CREATE TABLE IF NOT EXISTS predictions (
+    id SERIAL PRIMARY KEY,
+
+    city TEXT,
+    relative_humidity_2m DOUBLE PRECISION,
+    precipitation DOUBLE PRECISION,
+    wind_speed_10m DOUBLE PRECISION,
+    wind_gusts_10m DOUBLE PRECISION,
+    pressure_msl DOUBLE PRECISION,
+    surface_pressure DOUBLE PRECISION,
+    cloud_cover DOUBLE PRECISION,
+    dew_point_2m DOUBLE PRECISION,
+    weather_code INTEGER,
+    wind_direction_10m DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+
+    year INTEGER,
+    month INTEGER,
+    day INTEGER,
+    hour INTEGER,
+
+    predicted_temperature DOUBLE PRECISION,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
