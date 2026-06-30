@@ -21,6 +21,19 @@ services:
       - .env
     volumes:
       - .:/app
+  prediction:
+    build: .
+    depends_on:
+      - database
+      - app
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./model:/app/model
+    ports:
+      - "8000:8000"
+    command: uvicorn src.prediction:app --host 0.0.0.0 --port 8000
 
 volumes:
   postgres_data:

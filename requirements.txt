@@ -3,3 +3,7 @@ pandas
 sqlalchemy
 psycopg2-binary
 scikit-learn
+fastapi
+uvicorn
+joblib
+xgboost
