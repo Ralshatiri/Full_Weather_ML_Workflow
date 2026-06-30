@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import HTTPException
 import os
 import joblib
 import pandas as pd
@@ -21,7 +22,6 @@ engine = create_engine(DB_CONN)
 path = "/app/model/xgboost_model.joblib"
 
 model = joblib.load(path)
-
 # create the fastapi
 app = FastAPI()
 
@@ -50,47 +50,62 @@ def api():
 @app.post("/predict/single")
 def predict_single(data:weather_input):
 
-    input_df = pd.DataFrame([data.model_dump()])
+    try:
 
-    prediction = float(model.predict(input_df)[0])
+        input_df = pd.DataFrame([data.model_dump()])
 
-    result_df = input_df.copy()
-    result_df["predicted_temperature"] = prediction
+        prediction = round(float(model.predict(input_df)[0]),2)
 
-    result_df.to_sql(
-        name="predictions",
-        con=engine,
-        if_exists="append",
-        index=False
-    )
+        result_df = input_df.copy()
+        result_df["predicted_temperature"] = prediction
 
-    return {
-        "predicted_temperature":prediction,
-        "message":"Single prediction saved to database"
-    }
+        result_df.to_sql(
+            name="predictions",
+            con=engine,
+            if_exists="append",
+            index=False
+        )
+
+        return {
+            "predicted_temperature":prediction,
+            "message":"Single prediction saved to database"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Single prediction failed: {str(e)} "
+
+        )
 
 @app.post("/predict/batch")
 def predict_batch(data: list[weather_input]):
 
-    input_df = pd.DataFrame([row.model_dump() for row in data])
+    try:
 
-    predictions = model.predict(input_df)
+        input_df = pd.DataFrame([row.model_dump() for row in data])
 
-    resultes_df = input_df.copy()
-    resultes_df["predicted_temperature"] = predictions
+        predictions = model.predict(input_df)
 
-    resultes_df.to_sql(
-        name="predictions",
-        con=engine,
-        if_exists='append',
-        index=False
-    )
+        resultes_df = input_df.copy()
+        resultes_df["predicted_temperature"] = predictions
 
-    return {
-        "Number of predictions: ":len(predictions),
-        "Predictions": [round(float(pred),2) for pred in predictions],
-        "message":"Batch prediction saved to database"
+        resultes_df.to_sql(
+            name="predictions",
+            con=engine,
+            if_exists='append',
+            index=False
+        )
 
-    }
+        return {
+            "Number of predictions: ":len(predictions),
+            "Predictions": [round(float(pred),2) for pred in predictions],
+            "message":"Batch prediction saved to database"
 
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch prediction failed: {str(e)}"
+        )
 

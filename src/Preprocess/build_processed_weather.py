@@ -15,19 +15,23 @@ DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
 )
 
 def build_processed_data():
-    engine = create_engine(DB_CONN)
+    try:
+        engine = create_engine(DB_CONN)
 
-    raw_df = pd.read_sql("select * from raw_weather",engine)
-    processed_df = preprocess_weather(raw_df)
+        raw_df = pd.read_sql("select * from raw_weather",engine)
+        processed_df = preprocess_weather(raw_df)
 
-    processed_df.to_sql(
-        name="processed_weather",
-        con=engine,
-        if_exists="append",
-        index=False
-    )
-    
-    print(f"Inserted {len(processed_df)} rows into processed_weather")
-
+        processed_df.to_sql(
+            name="processed_weather",
+            con=engine,
+            if_exists="append",
+            index=False
+        )
+        
+        print(f"Inserted {len(processed_df)} rows into processed_weather")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to insert processed data {str(e)}"
+        )
 if __name__ == "__main__":
     build_processed_data()

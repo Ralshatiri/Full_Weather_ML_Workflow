@@ -22,12 +22,15 @@ DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
 )
 
 def get_data():
-    engine = create_engine(DB_CONN)
-    query = "SELECT * FROM processed_weather"
-    df = pd.read_sql(query, engine)
-    return df
-
-
+    try:
+        engine = create_engine(DB_CONN)
+        query = "SELECT * FROM processed_weather"
+        df = pd.read_sql(query, engine)
+        return df
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to read processed data"
+        )
 
 
 
@@ -115,9 +118,16 @@ def model_training():
 
     model.fit(X_train, y_train)
 
-    os.makedirs("model", exist_ok=True)
-    joblib.dump(model, "model/xgboost_model.joblib")
-    print("Xgboost model saved to model directory")
+    try:
+        os.makedirs("model", exist_ok=True)
+        joblib.dump(model, "model/xgboost_model.joblib")
+        print("Xgboost model saved to model directory")
+
+    except Exception as e:
+        raise RuntimeError(
+            f"failed to save model {str(e)}"
+        )
+
 
     for name, X, y_true in [
         ("Train", X_train, y_train),
