@@ -41,6 +41,7 @@ class weather_input(BaseModel):
     temperature_lag_24: float
     temperature_rolling_mean_24: float
     temperature_rolling_std_24: float
+    temperature_lag_720: float
 
 @app.get("/")
 def api():

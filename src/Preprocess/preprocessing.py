@@ -1,8 +1,6 @@
 import pandas as pd
 
-
-HORIZON = 24
-
+HORIZON = 24 * 30
 
 def clean_data(df):
     """
@@ -23,6 +21,7 @@ def drop_processed_columns(df):
     df = df.copy()
 
     columns_to_drop = [
+        "id",
         "dew_point_2m",
         "pressure_msl",
         "apparent_temperature",
@@ -110,13 +109,13 @@ def feature_engineering(df):
     df["day"] = df["time"].dt.day
     df["hour"] = df["time"].dt.hour
 
-    # Temperature 24 hours before current time t
+    # Temperature 720 hours before current time t
     df["temperature_lag_24"] = (
         df.groupby("city")["temperature_2m"]
         .shift(24)
     )
 
-    # Rolling mean of previous 24 hours
+    # Rolling mean of previous 720 hours
     # shift(1) means current row temperature is not included
     df["temperature_rolling_mean_24"] = (
         df.groupby("city")["temperature_2m"]
@@ -129,11 +128,15 @@ def feature_engineering(df):
         .transform(lambda x: x.shift(1).rolling(24, min_periods=24).std())
     )
 
+    df["temperature_lag_720"] = (
+        df.groupby("city")["temperature_2m"].shift(720)
+    )
     # Drop rows that do not have enough past history
     df = df.dropna(subset=[
         "temperature_lag_24",
         "temperature_rolling_mean_24",
-        "temperature_rolling_std_24"
+        "temperature_rolling_std_24",
+        "temperature_lag_720"
     ]).reset_index(drop=True)
 
     return df

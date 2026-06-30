@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     temperature_lag_24 DOUBLE PRECISION,
     temperature_rolling_mean_24 DOUBLE PRECISION,
     temperature_rolling_std_24 DOUBLE PRECISION,
+    temperature_lag_720 DOUBLE PRECISION,
 
     -- Model output
     predicted_temperature DOUBLE PRECISION,
