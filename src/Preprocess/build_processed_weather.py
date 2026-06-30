@@ -26,6 +26,7 @@ def build_processed_data():
         if_exists="append",
         index=False
     )
+    
     print(f"Inserted {len(processed_df)} rows into processed_weather")
 
 if __name__ == "__main__":

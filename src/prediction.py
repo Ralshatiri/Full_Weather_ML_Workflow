@@ -18,7 +18,7 @@ DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
 
 engine = create_engine(DB_CONN)
 
-path = "/app/model/random_forest_model.joblib"
+path = "/app/model/xgboost_model.joblib"
 
 model = joblib.load(path)
 
@@ -29,20 +29,18 @@ class weather_input(BaseModel):
     city: str
     relative_humidity_2m: float
     precipitation: float
-    wind_speed_10m: float
-    wind_gusts_10m: float
-    pressure_msl: float
+    weather_code: int
     surface_pressure: float
     cloud_cover: float
-    year: int
+    wind_speed_10m: float
+    wind_direction_10m: float
+    wind_gusts_10m: float
     month: int
     day: int
     hour: int
-    dew_point_2m: float
-    weather_code: int
-    wind_direction_10m: float
-    latitude: float
-    longitude: float
+    temperature_lag_24: float
+    temperature_rolling_mean_24: float
+    temperature_rolling_std_24: float
 
 @app.get("/")
 def api():
@@ -53,7 +51,7 @@ def predict_single(data:weather_input):
 
     input_df = pd.DataFrame([data.model_dump()])
 
-    prediction = model.predict(input_df)[0]
+    prediction = float(model.predict(input_df)[0])
 
     result_df = input_df.copy()
     result_df["predicted_temperature"] = prediction
@@ -83,7 +81,8 @@ def predict_batch(data: list[weather_input]):
     resultes_df.to_sql(
         name="predictions",
         con=engine,
-        if_exists='append'
+        if_exists='append',
+        index=False
     )
 
     return {

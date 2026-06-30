@@ -1,3 +1,6 @@
+-- =====================
+-- RAW TABLE
+-- =====================
 CREATE TABLE IF NOT EXISTS raw_weather (
     id SERIAL PRIMARY KEY,
     time TIMESTAMP,
@@ -28,22 +31,17 @@ CREATE TABLE IF NOT EXISTS raw_weather (
 CREATE TABLE IF NOT EXISTS processed_weather (
     id SERIAL PRIMARY KEY,
     temperature_2m FLOAT,
-    month INT,
-    day INT,
-    hour INT,
+    time TIMESTAMP,
     relative_humidity_2m FLOAT,
-    dew_point_2m FLOAT,
     precipitation FLOAT,
     weather_code INT,
-    pressure_msl FLOAT,
     surface_pressure FLOAT,
     cloud_cover FLOAT,
     wind_speed_10m FLOAT,
     wind_direction_10m FLOAT,
     wind_gusts_10m FLOAT,
-    city VARCHAR(100),
-    latitude FLOAT,
-    longitude FLOAT
+    city VARCHAR(100)
+
 );
 
 -- =====================
@@ -53,25 +51,23 @@ CREATE TABLE IF NOT EXISTS processed_weather (
 CREATE TABLE IF NOT EXISTS predictions (
     id SERIAL PRIMARY KEY,
 
-    city TEXT,
-    relative_humidity_2m DOUBLE PRECISION,
-    precipitation DOUBLE PRECISION,
-    wind_speed_10m DOUBLE PRECISION,
-    wind_gusts_10m DOUBLE PRECISION,
-    pressure_msl DOUBLE PRECISION,
-    surface_pressure DOUBLE PRECISION,
-    cloud_cover DOUBLE PRECISION,
-    dew_point_2m DOUBLE PRECISION,
-    weather_code INTEGER,
-    wind_direction_10m DOUBLE PRECISION,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
-
-    year INTEGER,
+    city TEXT NOT NULL,
     month INTEGER,
     day INTEGER,
     hour INTEGER,
+    relative_humidity_2m DOUBLE PRECISION,
+    precipitation DOUBLE PRECISION,
+    weather_code INTEGER,
+    surface_pressure DOUBLE PRECISION,
+    cloud_cover DOUBLE PRECISION,
+    wind_speed_10m DOUBLE PRECISION,
+    wind_direction_10m DOUBLE PRECISION,
+    wind_gusts_10m DOUBLE PRECISION,
+    temperature_lag_24 DOUBLE PRECISION,
+    temperature_rolling_mean_24 DOUBLE PRECISION,
+    temperature_rolling_std_24 DOUBLE PRECISION,
 
+    -- Model output
     predicted_temperature DOUBLE PRECISION,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -4,18 +4,16 @@ import joblib
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import root_mean_squared_error, r2_score
+from xgboost import XGBRegressor
+from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-
+from src.Preprocess.preprocessing import prepare_datetime_and_sort, create_forecasting_target,feature_engineering
 
 load_dotenv()
 
-
-DB_CONN = "postgresql+psycopg2://{}:{}@{}:{}/{}".format(
+DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
     os.getenv("POSTGRES_USER"),
     os.getenv("POSTGRES_PASSWORD"),
     os.getenv("DB_HOST"),
@@ -25,72 +23,113 @@ DB_CONN = "postgresql+psycopg2://{}:{}@{}:{}/{}".format(
 
 def get_data():
     engine = create_engine(DB_CONN)
-
-    query ="""
-        SELECT *
-        FROM processed_weather
-"""
-    df = pd.read_sql(query,engine)
+    query = "SELECT * FROM processed_weather"
+    df = pd.read_sql(query, engine)
     return df
 
-def split_data():
-
-    df = get_data()
-    df = df.drop(columns="id")
-
-    y = df['temperature_2m'] 
-    X = df.drop("temperature_2m",axis=1)
 
 
-    X_train,X_test,y_train,y_test = train_test_split(
-        X,y,
-        test_size=0.2,
-        random_state=42
-    )
-    return X_train,X_test,y_train,y_test
+
+
+def split_train_test(df):
+  train_df = df[df["target_time"]<"2019-01-01"].copy()
+
+  test_df = df[
+      (df["target_time"]>="2019-01-01") &
+      (df["target_time"]<"2020-01-01")
+  ].copy()
+
+  print("Train rows before feature engineering:", len(train_df))
+  print("Test rows before feature engineering:", len(test_df))
+
+  return train_df, test_df
+
+def prepare_features_and_target(train_df, test_df):
+    """
+    Drop unused columns and separate X and y.
+    """
+
+    train_df = train_df.sort_values("target_time").reset_index(drop=True)
+    test_df = test_df.sort_values("target_time").reset_index(drop=True)
+
+    columns_to_drop = [
+        "id",
+        "target",
+        "target_time",
+        "temperature_2m",
+        "time",
+    ]
+
+    X_train = train_df.drop(columns=columns_to_drop, errors="ignore")
+    y_train = train_df["target"]
+
+    X_test = test_df.drop(columns=columns_to_drop, errors="ignore")
+    y_test = test_df["target"]
+
+    print("Features:", X_train.columns.tolist())
+    print("Train shape:", X_train.shape)
+    print("Test shape:", X_test.shape)
+
+    return X_train, X_test, y_train, y_test
+
 
 
 def model_training():
 
-    X_train,X_test,y_train,y_test = split_data()
-    categorical_features = ["city"]
+    df = get_data()
+    df = prepare_datetime_and_sort(df)
+    df = create_forecasting_target(df)
+
+    train_df, test_df = split_train_test(df)
+
+    train_df = feature_engineering(train_df)
+    test_df = feature_engineering(test_df)
+
+    X_train, X_test, y_train, y_test = prepare_features_and_target(
+        train_df,
+        test_df
+    )
+
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ("cat",OneHotEncoder(handle_unknown="ignore"),categorical_features)
+            ("cat", OneHotEncoder(handle_unknown="ignore"), ['city'])
         ],
         remainder="passthrough"
     )
 
+    model = Pipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("regressor", XGBRegressor(
+            n_estimators=300,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,   
+            objective="reg:squarederror",
+            eval_metric="rmse",     
+            random_state=42,
+          
+        ))
+    ])
 
-    model =  Pipeline(
-        steps=[
-            ("preprocessor",preprocessor),(
-                "regressor", RandomForestRegressor(
-                n_estimators=100,
-                max_features="sqrt",
-                random_state=42
-                )
-            )
-        ]
-    )
+    model.fit(X_train, y_train)
 
-    model.fit(X_train,y_train)
+    os.makedirs("model", exist_ok=True)
+    joblib.dump(model, "model/xgboost_model.joblib")
+    print("Xgboost model saved to model directory")
 
-# Saving the model
-    os.makedirs("model",exist_ok=True)
-    joblib.dump(model,"model/random_forest_model.joblib")
-    print("Random forest model saved to model directory ")
+    for name, X, y_true in [
+        ("Train", X_train, y_train),
+        ("Test", X_test, y_test)
+    ]:
+        y_pred = model.predict(X)
 
-    y_pred = model.predict(X_test)
-    test_rmse = root_mean_squared_error(y_test,y_pred)
-    test_r2  = r2_score(y_test,y_pred)
+        rmse = root_mean_squared_error(y_true, y_pred)
+        mae = mean_absolute_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
 
-    y_pred_train = model.predict(X_train)
-    train_rmse = root_mean_squared_error(y_train, y_pred_train)
-    train_r2 = r2_score(y_train, y_pred_train)
-
-    print(f"Train RMSE: {train_rmse:.4f}")
-    print(f"Test RMSE: {test_rmse:.4f}")
-    print(f"Train R2: {train_r2:.4f}")
-    print(f"Test R2: {test_r2:.4f}")
+        print(f"{name} RMSE: {rmse:.4f}")
+        print(f"{name} MAE : {mae:.4f}")
+        print(f"{name} R²  : {r2:.4f}")
+        print("-" * 30)
