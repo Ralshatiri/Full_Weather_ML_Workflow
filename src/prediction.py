@@ -6,22 +6,20 @@ import pandas as pd
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from src.config import DB_CONN, MODEL_PATH
 
 load_dotenv()
 
-DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
-    os.getenv("POSTGRES_USER"),
-    os.getenv("POSTGRES_PASSWORD"),
-    os.getenv("DB_HOST"),
-    os.getenv("DB_PORT"),
-    os.getenv("POSTGRES_DB")
-)
 
 engine = create_engine(DB_CONN)
 
-path = "/app/model/xgboost_model.joblib"
+try:
+    model = joblib.load(MODEL_PATH)
+except Exception as e:
+    raise RuntimeError(
+        f"Failed to load model: {str(e)}"
+    )
 
-model = joblib.load(path)
 # create the fastapi
 app = FastAPI()
 
@@ -44,8 +42,17 @@ class weather_input(BaseModel):
     temperature_lag_720: float
 
 @app.get("/")
-def api():
-    return {"message":"The API is running"}
+def home():
+    return {
+        "message":"The API is running"
+        }
+
+@app.get("/health")
+def health():
+    return {
+        "status":"running"
+    }
+
 
 @app.post("/predict/single")
 def predict_single(data:weather_input):

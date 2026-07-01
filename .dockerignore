@@ -1,0 +1,11 @@
+.env
+venv/
+__pycache__/
+*.pyc
+.git/
+*.log
+.ipynb_checkpoints/
+
+model/
+data/raw/
+postgres_data/
