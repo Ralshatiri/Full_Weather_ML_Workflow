@@ -1,28 +1,25 @@
 import os
 from dotenv import load_dotenv
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from src.config import CSV_PATH , DB_CONN
 
 load_dotenv()
 
 
 
-DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
-    os.getenv("POSTGRES_USER"),
-    os.getenv("POSTGRES_PASSWORD"),
-    os.getenv("DB_HOST"),
-    os.getenv("DB_PORT"),
-    os.getenv("POSTGRES_DB")
-)
 
 def ingest():
 
     try:
         print('Reading data from csv.........')
-        data = pd.read_csv("data/raw/saudi_weather_data.csv")
+        data = pd.read_csv(CSV_PATH)
         print(f"Loaded {len(data)} rows")
 
         engine = create_engine(DB_CONN)
+
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE raw_weather RESTART IDENTITY;"))
 
         data["time"] = pd.to_datetime(data["time"])
         print("Inserting data into raw_weather...")

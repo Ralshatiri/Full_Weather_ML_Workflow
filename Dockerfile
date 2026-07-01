@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "-m", "src.run_pipeline"]
+CMD ["uvicorn", "src.prediction:app", "--host","0.0.0.0","--port","8000"]

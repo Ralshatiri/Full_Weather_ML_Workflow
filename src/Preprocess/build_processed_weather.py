@@ -3,16 +3,11 @@ from dotenv import load_dotenv
 import pandas as pd
 from sqlalchemy import create_engine
 from src.Preprocess.preprocessing import preprocess_weather
+from src.config import DB_CONN
 
 load_dotenv()
 
-DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
-    os.getenv("POSTGRES_USER"),
-    os.getenv("POSTGRES_PASSWORD"),
-    os.getenv("DB_HOST"),
-    os.getenv("DB_PORT"),
-    os.getenv("POSTGRES_DB")
-)
+
 
 def build_processed_data():
     try:

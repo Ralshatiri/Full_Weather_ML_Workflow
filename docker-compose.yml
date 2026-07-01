@@ -13,23 +13,24 @@ services:
 
       - ./sql:/docker-entrypoint-initdb.d
 
-  app:
+  pipeline:
     build: .
     depends_on:
       - database
     env_file:
       - .env
     volumes:
-      - .:/app
+      - ./data/raw:/app/data/raw
+      - ./model:/app/model
+    command: python -m src.run_pipeline
   prediction:
     build: .
     depends_on:
       - database
-      - app
+      - pipeline
     env_file:
       - .env
     volumes:
-      - .:/app
       - ./model:/app/model
     ports:
       - "8000:8000"

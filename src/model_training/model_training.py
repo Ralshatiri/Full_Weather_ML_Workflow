@@ -10,6 +10,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from src.Preprocess.preprocessing import prepare_datetime_and_sort, create_forecasting_target,feature_engineering
+from src.config import MODEL_DIR,MODEL_PATH
 
 load_dotenv()
 
@@ -119,8 +120,8 @@ def model_training():
     model.fit(X_train, y_train)
 
     try:
-        os.makedirs("model", exist_ok=True)
-        joblib.dump(model, "model/xgboost_model.joblib")
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        joblib.dump(model, MODEL_PATH)
         print("Xgboost model saved to model directory")
 
     except Exception as e:
