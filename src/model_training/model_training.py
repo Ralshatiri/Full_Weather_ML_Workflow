@@ -1,8 +1,10 @@
 import os
+from fastapi import Path
 import pandas as pd
 import joblib
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
+boto3
 
 from xgboost import XGBRegressor
 from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
@@ -10,17 +12,10 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from src.Preprocess.preprocessing import prepare_datetime_and_sort, create_forecasting_target,feature_engineering
-from src.config import MODEL_DIR,MODEL_PATH
+from src.config import MODEL_DIR,MODEL_PATH,DB_CONN
 
 load_dotenv()
 
-DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
-    os.getenv("POSTGRES_USER"),
-    os.getenv("POSTGRES_PASSWORD"),
-    os.getenv("DB_HOST"),
-    os.getenv("DB_PORT"),
-    os.getenv("POSTGRES_DB")
-)
 
 def get_data():
     try:
@@ -76,6 +71,22 @@ def prepare_features_and_target(train_df, test_df):
 
     return X_train, X_test, y_train, y_test
 
+def upload_model_to_s3(local_model_path: str):
+    bucket = os.getenv("MODEL_S3_BUCKET")
+    key = os.getenv("MODEL_S3_KEY")
+
+    if not bucket or not key:
+        raise ValueError("MODEL_S3_BUCKET and MODEL_S3_KEY must be set in .env")
+
+    s3 = boto3.client("s3")
+
+    s3.upload_file(
+        Filename=local_model_path,
+        Bucket=bucket,
+        Key=key
+    )
+
+    print(f"Model uploaded to s3://{bucket}/{key}")
 
 
 def model_training():
@@ -120,9 +131,10 @@ def model_training():
     model.fit(X_train, y_train)
 
     try:
-        os.makedirs(MODEL_DIR, exist_ok=True)
-        joblib.dump(model, MODEL_PATH)
-        print("Xgboost model saved to model directory")
+        Path("model").mkdir(parents=True, exist_ok=True)
+        local_model_path = "model/xgboost_model.joblib"
+        joblib.dump(model, local_model_path)
+        upload_model_to_s3(local_model_path)
 
     except Exception as e:
         raise RuntimeError(
