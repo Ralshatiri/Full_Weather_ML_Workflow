@@ -4,7 +4,7 @@ import pandas as pd
 import joblib
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
-boto3
+import boto3
 
 from xgboost import XGBRegressor
 from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
