@@ -14,7 +14,7 @@ services:
       - ./sql:/docker-entrypoint-initdb.d
 
   pipeline:
-    build: .
+    image: raalshat21/weather-ml-image:v2
     depends_on:
       - database
     env_file:
@@ -24,7 +24,7 @@ services:
       - ./model:/app/model
     command: python -m src.run_pipeline
   prediction:
-    build: .
+    image: raalshat21/weather-ml-image:v2
     depends_on:
       - database
       - pipeline
