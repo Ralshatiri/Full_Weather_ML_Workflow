@@ -2,9 +2,15 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
+load_dotenv()
 
-# Dataset 
-CSV_PATH = os.getenv("CSV_path","data/raw/saudi_weather_data.csv")
+
+# ---------- S3 ----------
+S3_BUCKET = os.getenv("MODEL_S3_BUCKET")
+RAW_DATA_S3_KEY = os.getenv("RAW_DATA_S3_KEY")
+MODEL_S3_KEY = os.getenv("MODEL_S3_KEY")
+
+
 
 # Model 
 MODEL_DIR = os.getenv("MODEL_DIR","model")
@@ -13,7 +19,7 @@ MODEL_PATH = os.getenv(
     os.path.join(MODEL_DIR,"xgboost_model.joblib")
 )
 
-load_dotenv()
+
 
 DB_CONN = "postgresql://{}:{}@{}:{}/{}".format(
     os.getenv("POSTGRES_USER"),
