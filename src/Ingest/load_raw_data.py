@@ -36,7 +36,7 @@ def ingest():
         engine = create_engine(DB_CONN)
 
         with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE raw_weather RESTART IDENTITY;"))
+            conn.execute(text("TRUNCATE TABLE raw_weather RESTART IDENTITY CASCADE;"))
 
         data["time"] = pd.to_datetime(data["time"])
         print("Inserting data into raw_weather...")
@@ -50,7 +50,7 @@ def ingest():
         print("Ingestion completed successfully.")
 
     except Exception as e:
-        print(f"Error handling ingestion {str(e)}")
+        raise RuntimeError(f"Error handling ingestion {str(e)}")
 
 if __name__=="__main__":
     ingest()

@@ -1,7 +1,7 @@
 import os 
 from dotenv import load_dotenv
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from src.Preprocess.preprocessing import preprocess_weather
 from src.config import DB_CONN
 
@@ -15,6 +15,12 @@ def build_processed_data():
 
         raw_df = pd.read_sql("select * from raw_weather",engine)
         processed_df = preprocess_weather(raw_df)
+
+ # Clear old processed data before inserting the new processed data
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE processed_weather RESTART IDENTITY;"))
+
+        print("Cleared old processed_weather data.")
 
         processed_df.to_sql(
             name="processed_weather",
