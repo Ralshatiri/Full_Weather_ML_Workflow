@@ -12,28 +12,47 @@ services:
 
       - ./sql:/docker-entrypoint-initdb.d
 
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      
   pipeline:
-    image: raalshat21/weather-ml-image:v6
+    image: raalshat21/weather-image:v1
     depends_on:
       - database
     env_file:
       - .env
-    volumes:
-      - ./data/raw:/app/data/raw
-      - ./model:/app/model
     command: python -m src.run_pipeline
   prediction:
-    image: raalshat21/weather-ml-image:v6
+    image: raalshat21/weather-image:v1
     depends_on:
-      - database
-      - pipeline
+      - redis
+      - rabbitmq
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    command: uvicorn src.api.prediction:app --host 0.0.0.0 --port 8000
+
+  worker:
+    image: raalshat21/weather-image:v1
+    depends_on:
+        - database
+        - redis
+        - rabbitmq
     env_file:
       - .env
     volumes:
       - ./model:/app/model
-    ports:
-      - "8000:8000"
-    command: uvicorn src.prediction:app --host 0.0.0.0 --port 8000
+    command: python -m src.worker.prediction_worker  
+
 
 volumes:
   postgres_data:
