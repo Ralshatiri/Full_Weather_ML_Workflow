@@ -1,5 +1,5 @@
 import os
-from fastapi import Path
+from pathlib import Path
 import pandas as pd
 import joblib
 from sqlalchemy import create_engine

@@ -13,7 +13,7 @@ services:
       - ./sql:/docker-entrypoint-initdb.d
 
   pipeline:
-    image: raalshat21/weather-ml-image:v4
+    image: raalshat21/weather-ml-image:v5
     depends_on:
       - database
     env_file:
@@ -23,7 +23,7 @@ services:
       - ./model:/app/model
     command: python -m src.run_pipeline
   prediction:
-    image: raalshat21/weather-ml-image:v4
+    image: raalshat21/weather-ml-image:v5
     depends_on:
       - database
       - pipeline
