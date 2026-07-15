@@ -10,6 +10,8 @@ REQUIRED_COLUMNS = [
     "time",
     "city",
     TARGET_COLUMN,
+    "latitude",
+    "longitude",
 ]
 
 PROCESSED_COLUMNS = [
@@ -18,6 +20,8 @@ PROCESSED_COLUMNS = [
     TARGET_COLUMN,
     "doy_sin",
     "doy_cos",
+    "latitude",
+    "longitude",
 ]
 
 
@@ -71,6 +75,16 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     cleaned_df["time"] = pd.to_datetime(
         cleaned_df["time"],
+        errors="coerce",
+    )
+
+    cleaned_df["latitude"] = pd.to_numeric(
+    cleaned_df["latitude"],
+    errors="coerce",
+)
+
+    cleaned_df["longitude"] = pd.to_numeric(
+        cleaned_df["longitude"],
         errors="coerce",
     )
 
@@ -210,7 +224,7 @@ def drop_processed_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     The raw table preserves all downloaded weather variables. The univariate
     recursive model uses only daily mean temperature, cyclical calendar
-    features, and city identity.
+    features, and location coordinates.
 
     City remains as a text column in ``processed_weather``. It is converted
     to one-hot columns later during training.

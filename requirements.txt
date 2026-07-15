@@ -1,0 +1,15 @@
+boto3
+python-dotenv
+fastapi
+joblib
+numpy
+pandas
+pika
+pydantic
+redis
+sqlalchemy
+psycopg2-binary
+tensorflow
+uvicorn
+scikit-learn
+requests

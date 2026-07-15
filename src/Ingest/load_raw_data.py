@@ -65,12 +65,13 @@ def ingest():
     try:
         print("Reading data from CSV.........")
 
-        # Local testing
-        data = read_raw_weather_csv_from_local()
 
-        # AWS deployment:
-        # Comment the local line above and use this line.
-        # data = read_raw_weather_csv_from_s3()
+
+        try:
+            data = read_raw_weather_csv_from_local()
+        except FileNotFoundError:
+            print("Local CSV not found. Reading raw data from S3.")
+            data = read_raw_weather_csv_from_s3()
 
         print(f"Loaded {len(data)} rows")
 

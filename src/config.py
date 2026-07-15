@@ -7,12 +7,49 @@ load_dotenv()
 S3_BUCKET = os.getenv("MODEL_S3_BUCKET")
 RAW_DATA_S3_KEY = os.getenv("RAW_DATA_S3_KEY")
 MODEL_S3_KEY = os.getenv("MODEL_S3_KEY")
+MODEL_METADATA_S3_KEY = os.getenv("MODEL_METADATA_S3_KEY")
+
+# for local testing to work
+UPLOAD_ARTIFACTS_TO_S3 = (
+    os.getenv(
+        "UPLOAD_ARTIFACTS_TO_S3",
+        "false",
+    ).lower()
+    == "true"
+)
+
+# ---------- Recent weather API ----------
+OPEN_METEO_URL = os.getenv(
+    "OPEN_METEO_URL",
+    "https://api.open-meteo.com/v1/forecast",
+)
+
+WEATHER_TIMEZONE = os.getenv(
+    "WEATHER_TIMEZONE",
+    "Asia/Riyadh",
+)
+
+WEATHER_HISTORY_CACHE_TTL = int(
+    os.getenv(
+        "WEATHER_HISTORY_CACHE_TTL",
+        "21600",
+    )
+)
+
 
 # ---------- Model ----------
 MODEL_DIR = os.getenv("MODEL_DIR", "model")
 MODEL_PATH = os.getenv(
-    "Model_path",
-    os.path.join(MODEL_DIR, "xgboost_model.joblib")
+    "MODEL_PATH",
+    os.path.join(MODEL_DIR, "recursive_lstm.keras")
+)
+
+MODEL_METADATA_PATH = os.getenv(
+    "MODEL_METADATA_PATH",
+    os.path.join(
+        MODEL_DIR,
+        "recursive_lstm_metadata.joblib",
+    ),
 )
 
 # ---------- Database ----------
