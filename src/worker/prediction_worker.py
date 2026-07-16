@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import requests
+import redis
 
 import boto3
 import joblib
@@ -221,7 +222,7 @@ def get_recent_city_history(
     city: str,
     sequence_length: int,
     redis_client,
-) -> pd.DataFrame:
+):
     """
     Retrieve the latest completed weather history.
 
@@ -238,14 +239,27 @@ def get_recent_city_history(
         f"{latest_complete_date.isoformat()}"
     )
 
-    cached_value = redis_client.get(cache_key)
+    cached_value = None
+
+    if redis_client is not None:
+        try:
+            cached_value = redis_client.get(
+                cache_key
+            )
+
+        except Exception as e:
+            print(
+                f"Redis weather-history read failed.Continuing without cache: {e}"
+            )
 
     if cached_value:
         print(
             f"Using cached recent history for {city}."
         )
 
-        cached_records = json.loads(cached_value)
+        cached_records = json.loads(
+            cached_value
+        )
 
         return validate_recent_history(
             pd.DataFrame(cached_records),
@@ -317,15 +331,22 @@ def get_recent_city_history(
         .dt.strftime("%Y-%m-%d")
     )
 
-    redis_client.setex(
-        cache_key,
-        WEATHER_HISTORY_CACHE_TTL,
-        json.dumps(
-            cached_df.to_dict(
-                orient="records"
+    if redis_client is not None:
+        try:
+            redis_client.setex(
+                cache_key,
+                WEATHER_HISTORY_CACHE_TTL,
+                json.dumps(
+                    cached_df.to_dict(
+                        orient="records"
+                    )
+                ),
             )
-        ),
-    )
+
+        except Exception as e:
+            print(
+                f"Redis weather-history write failed. Continuing without cache: {e}"
+            )
 
     return history_df
 
@@ -616,8 +637,8 @@ def main():
 
     redis_client = connect_redis()
     if redis_client is None:
-        raise ConnectionError(
-            "Worker requires Redis, but the connection failed."
+        print(
+        "Worker is starting without Redis.Predictions will still be processed."          
         )
 
     engine = create_engine(DB_CONN)
@@ -720,9 +741,9 @@ def main():
 
             print(f"Completed job {job_id}")
 
-        except Exception as error:
+        except Exception as e:
             print(
-                f"Failed to process job: {error}"
+                f"Failed to process job: {e}"
             )
 
             if job and "job_id" in job:
@@ -731,7 +752,7 @@ def main():
                     {
                         "status": "failed",
                         "job_id": job["job_id"],
-                        "error": str(error),
+                        "error": str(e),
                     },
                 )
 

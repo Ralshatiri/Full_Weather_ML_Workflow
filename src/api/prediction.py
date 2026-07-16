@@ -8,9 +8,13 @@ and publishes prediction jobs to RabbitMQ.
 
 import uuid
 
+from sqlalchemy import create_engine, text
+from src.config import DB_CONN
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
+from pika.exceptions import AMQPError
 
 from src.services.rabbitmq_publisher import publish_prediction_job
 from src.services.redis_cache import (
@@ -32,6 +36,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
+engine = create_engine(
+    DB_CONN,
+    pool_pre_ping=True,
+)
+
 
 class ForecastInput(BaseModel):
     """
@@ -47,7 +56,7 @@ class ForecastInput(BaseModel):
 
     @field_validator("city")
     @classmethod
-    def clean_city_name(cls, city: str) -> str:
+    def clean_city_name(cls, city: str) :
         """
         Remove surrounding whitespace and reject an empty city name.
 
@@ -77,7 +86,7 @@ class ForecastInput(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict:
+def health()  :
     """
     Return current API health status.
     """
@@ -87,7 +96,7 @@ def health() -> dict:
 
 
 @app.post("/predict/single")
-def predict_single(data: ForecastInput) -> dict:
+def predict_single(data: ForecastInput) :
     """
     The endpoint checks whether the same request already has a cached result.
     If not, it creates a job identifier, records the pending status in Redis,
@@ -121,6 +130,8 @@ def predict_single(data: ForecastInput) -> dict:
             "input": input_dict,
         }
 
+        publish_prediction_job(job_message)
+
         save_job_status(
             job_id,
             {
@@ -134,7 +145,7 @@ def predict_single(data: ForecastInput) -> dict:
             },
         )
 
-        publish_prediction_job(job_message)
+        
 
         return {
             "status": "queued",
@@ -144,13 +155,13 @@ def predict_single(data: ForecastInput) -> dict:
                 f"/predict/result/{job_id}"
             ),
         }
-
+    
+    
     except Exception as error:
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail=(
-                "Forecast queueing failed: "
-                f"{error}"
+            "Forecast queue is currently unavailable.Please try again later."
             ),
         ) from error
 
@@ -158,7 +169,7 @@ def predict_single(data: ForecastInput) -> dict:
 @app.post("/predict/batch")
 def predict_batch(
     data: list[ForecastInput],
-) -> dict:
+):
     """
     Queue forecasts for multiple cities in one job.
 
@@ -205,6 +216,8 @@ def predict_batch(
             "input": input_list,
         }
 
+        publish_prediction_job(job_message)
+
         save_job_status(
             job_id,
             {
@@ -218,7 +231,6 @@ def predict_batch(
             },
         )
 
-        publish_prediction_job(job_message)
 
         return {
             "status": "queued",
@@ -234,37 +246,108 @@ def predict_batch(
 
     except Exception as error:
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail=(
-                "Batch forecast queueing failed: "
-                f"{error}"
+            "Forecast queue is currently unavailable.Please try again later."
+
             ),
         ) from error
 
+def get_completed_result_from_database(
+    job_id: str,
+):
+    query = text(
+        """
+        SELECT
+            city,
+            forecast_origin,
+            forecast_date,
+            forecast_step,
+            predicted_temperature
+        FROM predictions
+        WHERE job_id = :job_id
+        ORDER BY city, forecast_step
+        """
+    )
+
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                query,
+                {"job_id": job_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    if not rows:
+        return None
+
+    predictions = []
+
+    for row in rows:
+        predictions.append(
+            {
+                "city": row["city"],
+                "forecast_origin": (
+                    row["forecast_origin"].isoformat()
+                ),
+                "forecast_date": (
+                    row["forecast_date"].isoformat()
+                ),
+                "forecast_step": row["forecast_step"],
+                "predicted_temperature": (
+                    row["predicted_temperature"]
+                ),
+            }
+        )
+
+    response = {
+        "number_of_predictions": len(predictions),
+        "predictions": predictions,
+        "source": "database",
+        "message": (
+            "Recursive forecast completed "
+            "and loaded from database."
+        ),
+    }
+
+    return {
+        "status": "completed",
+        "job_id": job_id,
+        "result": response,
+    }
 
 @app.get("/predict/result/{job_id}")
-def get_prediction_result(job_id: str) -> dict:
-    """
-    Retrieve the current status or completed result of a forecast job.
-    """
+def get_prediction_result(job_id: str):
     try:
-        job_status = get_job_status(job_id)
+        uuid.UUID(job_id)
 
-        if not job_status:
-            raise HTTPException(
-                status_code=404,
-                detail="Job not found or expired.",
-            )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid job identifier.",
+        ) from error
 
+    job_status = get_job_status(job_id)
+
+    if job_status:
         return job_status
 
-    except HTTPException:
-        raise
+    database_result = (
+        get_completed_result_from_database(
+            job_id
+        )
+    )
 
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Failed to get job result: {error}"
-            ),
-        ) from error
+    if database_result:
+        return database_result
+
+    return {
+        "status": "processing",
+        "job_id": job_id,
+        "message": (
+            "The job is queued or processing. "
+            "Check again shortly."
+        ),
+    }
