@@ -24,14 +24,17 @@ services:
       - "15672:15672"
       
   pipeline:
-    image: raalshat21/weather-image:v1
+    image: raalshat21/temperature-image:v2 
     depends_on:
       - database
+    volumes:
+      - ./data/raw:/app/data/raw
+      - ./model:/app/model
     env_file:
       - .env
     command: python -m src.run_pipeline
   prediction:
-    image: raalshat21/weather-image:v1
+    image: raalshat21/temperature-image:v2
     depends_on:
       - redis
       - rabbitmq
@@ -42,7 +45,7 @@ services:
     command: uvicorn src.api.prediction:app --host 0.0.0.0 --port 8000
 
   worker:
-    image: raalshat21/weather-image:v1
+    image: raalshat21/temperature-image:v2 
     depends_on:
         - database
         - redis

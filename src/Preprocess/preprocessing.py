@@ -1,154 +1,289 @@
+
+import numpy as np
 import pandas as pd
 
-HORIZON = 24 * 30
 
-def clean_data(df):
+TARGET_COLUMN = "temperature_2m_mean"
+SEQUENCE_LENGTH = 30
+
+REQUIRED_COLUMNS = [
+    "time",
+    "city",
+    TARGET_COLUMN,
+    "latitude",
+    "longitude",
+]
+
+PROCESSED_COLUMNS = [
+    "time",
+    "city",
+    TARGET_COLUMN,
+    "doy_sin",
+    "doy_cos",
+    "latitude",
+    "longitude",
+]
+
+
+def validate_required_columns(df: pd.DataFrame) -> None:
     """
-    Remove duplicate rows and rows missing temperature_2m.
+    Verify that the raw data contains the columns required by the LSTM.
+
+    The univariate recursive model requires only the observation date,
+    city, and daily mean temperature..
+
     """
-    df = df.copy()
-
-    df = df.drop_duplicates()
-    df = df.dropna(subset=["temperature_2m"])
-
-    return df
-
-
-def drop_processed_columns(df):
-    """
-    Drop unnecessary columns while building the processed_weather table.
-    """
-    df = df.copy()
-
-    columns_to_drop = [
-        "id",
-        "dew_point_2m",
-        "pressure_msl",
-        "apparent_temperature",
-        "rain",
-        "cloud_cover_high",
-        "cloud_cover_low",
-        "cloud_cover_mid",
-        "latitude",
-        "longitude"
+    missing_columns = [
+        column
+        for column in REQUIRED_COLUMNS
+        if column not in df.columns
     ]
 
-    df = df.drop(columns=columns_to_drop, errors="ignore")
+    if missing_columns:
+        raise ValueError(
+            f"Raw weather data is missing columns: {missing_columns}"
+        )
 
-    print("Dropped unnecessary processed columns!")
 
-    return df
-
-
-def prepare_datetime_and_sort(df):
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert time column to datetime and sort by city/time.
+    Clean and chronologically arrange daily weather observations.
 
-    Sorting is required before creating:
-    - future target
-    - lag features
-    - rolling features
+    This function:
+    - Converts ``time`` to datetime.
+    - Converts daily mean temperature to numeric values.
+    - Cleans city names.
+    - Removes rows missing essential values.
+    - Removes duplicate city-date observations.
+    - Sorts observations by city and time.
+
+    If multiple rows have the same city and date, the last row is retained.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw weather data retrieved from PostgreSQL.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Cleaned and chronologically sorted weather data.
     """
-    df = df.copy()
+    validate_required_columns(df)
 
-    df["time"] = pd.to_datetime(df["time"])
+    cleaned_df = df.copy()
 
-    df = df.sort_values(["city", "time"]).reset_index(drop=True)
-
-    return df
-
-
-def create_forecasting_target(df, horizon=HORIZON):
-    """
-    Create the forecasting target.
-
-    target:
-        temperature_2m 24 hours in the future
-
-    target_time:
-        time 24 hours in the future
-
-    The shift is done inside each city separately to avoid mixing cities.
-    """
-    df = df.copy()
-
-    original_rows = len(df)
-
-    df["target"] = (
-        df.groupby("city")["temperature_2m"]
-        .shift(-horizon)
+    cleaned_df["time"] = pd.to_datetime(
+        cleaned_df["time"],
+        errors="coerce",
     )
 
-    df["target_time"] = (
-        df.groupby("city")["time"]
-        .shift(-horizon)
+    cleaned_df["latitude"] = pd.to_numeric(
+    cleaned_df["latitude"],
+    errors="coerce",
+)
+
+    cleaned_df["longitude"] = pd.to_numeric(
+        cleaned_df["longitude"],
+        errors="coerce",
     )
 
-    rows_before_drop = len(df)
-
-    df = df.dropna(subset=["target", "target_time"]).reset_index(drop=True)
-
-    rows_after_drop = len(df)
-
-    print("Original rows:", original_rows)
-    print("Rows before target drop:", rows_before_drop)
-    print("Rows after target drop:", rows_after_drop)
-    print("Rows removed because of missing target:", rows_before_drop - rows_after_drop)
-    print("Number of cities:", df["city"].nunique())
-
-    return df
-
-
-def feature_engineering(df):
-    df = df.copy()
-
-    df = df.sort_values(["city", "time"]).reset_index(drop=True)
-
-    # Calendar features from current time t
-    df["month"] = df["time"].dt.month
-    df["day"] = df["time"].dt.day
-    df["hour"] = df["time"].dt.hour
-
-    # Temperature 720 hours before current time t
-    df["temperature_lag_24"] = (
-        df.groupby("city")["temperature_2m"]
-        .shift(24)
+    cleaned_df[TARGET_COLUMN] = pd.to_numeric(
+        cleaned_df[TARGET_COLUMN],
+        errors="coerce",
     )
 
-    # Rolling mean of previous 720 hours
-    # shift(1) means current row temperature is not included
-    df["temperature_rolling_mean_24"] = (
-        df.groupby("city")["temperature_2m"]
-        .transform(lambda x: x.shift(1).rolling(24, min_periods=24).mean())
+    cleaned_df["city"] = (
+        cleaned_df["city"]
+        .astype("string")
+        .str.strip()
+        .replace("", pd.NA)
     )
 
-    # Rolling standard deviation of previous 24 hours
-    df["temperature_rolling_std_24"] = (
-        df.groupby("city")["temperature_2m"]
-        .transform(lambda x: x.shift(1).rolling(24, min_periods=24).std())
+    cleaned_df = cleaned_df.dropna(
+        subset=REQUIRED_COLUMNS
     )
 
-    df["temperature_lag_720"] = (
-        df.groupby("city")["temperature_2m"].shift(720)
+    cleaned_df = cleaned_df.drop_duplicates(
+        subset=["city", "time"],
+        keep="last",
     )
-    # Drop rows that do not have enough past history
-    df = df.dropna(subset=[
-        "temperature_lag_24",
-        "temperature_rolling_mean_24",
-        "temperature_rolling_std_24",
-        "temperature_lag_720"
-    ]).reset_index(drop=True)
 
-    return df
+    cleaned_df = cleaned_df.sort_values(
+        by=["city", "time"]
+    ).reset_index(drop=True)
+
+    if cleaned_df.empty:
+        raise ValueError(
+            "No valid rows remain after cleaning raw weather data."
+        )
+
+    return cleaned_df
 
 
-
-
-def preprocess_weather(df):
+def validate_daily_frequency(df: pd.DataFrame) -> None:
     """
-    Preprocessing used when building the processed_weather table.
-    """
-    df = clean_data(df)
-    df = drop_processed_columns(df)
+    Verify that observations are consecutive within each city.
 
-    return df
+    An LSTM sequence assumes that adjacent rows represent adjacent days.
+    For example, a 30-row sequence must represent 30 consecutive days.
+    Missing dates could otherwise create an incorrect sequence.
+    """
+    gaps_by_city = {}
+
+    for city, city_df in df.groupby("city", sort=False):
+        dates = city_df["time"].sort_values()
+        differences = dates.diff().dropna()
+
+        invalid_intervals = differences[
+            differences != pd.Timedelta(days=1)
+        ]
+
+        if not invalid_intervals.empty:
+            gaps_by_city[str(city)] = len(invalid_intervals)
+
+    if gaps_by_city:
+        raise ValueError(
+            "Non-consecutive daily observations were detected. "
+            f"Invalid intervals by city: {gaps_by_city}"
+        )
+
+
+def validate_city_history(
+    df: pd.DataFrame,
+    sequence_length: int = SEQUENCE_LENGTH,
+) -> None:
+    """
+    Confirm that every city can produce at least one training sequence.
+
+    A ``t+1`` recursive model with a 30-day window needs at least 31 rows:
+    30 input observations and one next-day target.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Cleaned daily weather data.
+    sequence_length : int, default=30
+        Number of historical days used in one model input window.
+    """
+    if sequence_length <= 0:
+        raise ValueError(
+            "sequence_length must be greater than zero."
+        )
+
+    minimum_rows = sequence_length + 1
+    rows_per_city = df.groupby("city").size()
+
+    insufficient_cities = rows_per_city[
+        rows_per_city < minimum_rows
+    ].to_dict()
+
+    if insufficient_cities:
+        raise ValueError(
+            f"Each city needs at least {minimum_rows} rows. "
+            f"Insufficient city histories: {insufficient_cities}"
+        )
+
+
+def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add cyclical day-of-year features.
+
+    Day of year is represented with sine and cosine values so the model
+    understands the cyclical relationship between December and January.
+    """
+    if "time" not in df.columns:
+        raise ValueError(
+            "Cannot create calendar features without 'time'."
+        )
+
+    if not pd.api.types.is_datetime64_any_dtype(df["time"]):
+        raise ValueError(
+            "The 'time' column must be datetime before "
+            "creating calendar features."
+        )
+
+    featured_df = df.copy()
+
+    day_of_year = featured_df["time"].dt.dayofyear
+
+    featured_df["doy_sin"] = np.sin(
+        2 * np.pi * day_of_year / 365.25
+    )
+
+    featured_df["doy_cos"] = np.cos(
+        2 * np.pi * day_of_year / 365.25
+    )
+
+    return featured_df
+
+
+def drop_processed_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove raw columns that are not used by the recursive LSTM.
+
+    The raw table preserves all downloaded weather variables. The univariate
+    recursive model uses only daily mean temperature, cyclical calendar
+    features, and location coordinates.
+
+    City remains as a text column in ``processed_weather``. It is converted
+    to one-hot columns later during training.
+    """
+    missing_columns = [
+        column
+        for column in PROCESSED_COLUMNS
+        if column not in df.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            f"Cannot build processed data. Missing columns: "
+            f"{missing_columns}"
+        )
+
+    processed_df = df[PROCESSED_COLUMNS].copy()
+
+    print(
+        "Removed raw columns that are not used by "
+        "the univariate recursive LSTM."
+    )
+
+    return processed_df
+
+
+def preprocess_weather(
+    df: pd.DataFrame,
+    sequence_length: int = SEQUENCE_LENGTH,
+) -> pd.DataFrame:
+    """
+
+    The function:
+    1. Cleans raw daily weather observations.
+    2. Confirms that dates are consecutive within each city.
+    3. Confirms that every city has enough history for LSTM sequences.
+    4. Creates cyclical day-of-year features.
+    5. Removes columns not used by the recursive model.
+
+    """
+    processed_df = clean_data(df)
+
+    validate_daily_frequency(processed_df)
+    validate_city_history(
+        processed_df,
+        sequence_length=sequence_length,
+    )
+
+    processed_df = add_calendar_features(processed_df)
+    processed_df = drop_processed_columns(processed_df)
+
+    print("Weather preprocessing completed successfully.")
+    print(f"Processed rows: {len(processed_df)}")
+    print(f"Number of cities: {processed_df['city'].nunique()}")
+    print(
+        "Date range:",
+        processed_df["time"].min().date(),
+        "to",
+        processed_df["time"].max().date(),
+    )
+
+    return processed_df
