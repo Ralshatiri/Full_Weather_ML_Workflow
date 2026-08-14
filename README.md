@@ -22,23 +22,4 @@ This project demonstrates a full ML pipeline, including:
 - Saving prediction results
 - Running the full workflow using Docker
 
----
 
-## Repository Structure
-
-```text
-data/
-└── raw/
-    └── raw weather dataset
-
-sql/
-└── database schema and table creation scripts
-
-src/
-└── source code for data ingestion, preprocessing, and model training
-
-.gitignore
-Dockerfile
-docker-compose.yml
-requirements.txt
-README.md
